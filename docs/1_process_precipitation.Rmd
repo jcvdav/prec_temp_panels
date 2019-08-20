@@ -1,0 +1,314 @@
+---
+title: "Precipitation data"
+author: "Villaseñor-Derbez J.C."
+date: "Last compiled on `r Sys.Date()`"
+output:
+  bookdown::html_document2: 
+    fig_caption: yes
+    toc: yes
+    toc_float: yes
+    code_folding: hide
+---
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      message = FALSE)
+```
+
+# Load packages
+
+```{r}
+suppressPackageStartupMessages({
+  library(startR) #custom functions
+  library(lubridate) #handle dates
+  library(here) #path management
+  library(rnaturalearth) #coastlines and basemaps
+  library(raster) #work with the NC file
+  library(tidyverse) #data management
+})
+```
+
+# The data
+
+There are two rasters that we can use, with different spatial and temporal coverage. De data come from [NOAA's PRECipitation REConstruction over Land (PREC/L)](https://www.esrl.noaa.gov/psd/data/gridded/data.precl.html). They make three datasets available, with "monthly values 1948/01 to Jul 2019 except the 0.5 degree data, which runs behind". We will use two rasters:
+
+- 1.0 degree latitude x 1.0 degree longitude global grid (360x180)
+
+- 0.5 degree latitude x 0.5 degree longitude global grid (720x360)
+
+Note that NOAA often makes climate data available on a cartesian system where longitude exists from 0 to 360, instead of the commonly used -180 to 180 plane. We'll fix this eventually using the `raster::rotate()` function.
+
+The goal is to downscale the 1-degree one to 0.5-degree and create a table (panel) that contains the following variables:
+
+- year
+- month
+- day
+- longitude
+- latitude
+- precipitation
+
+These variables should be available all the way to the present. Technically, we would only need to process de 1-degree raster. However, I will also process the 0.5-degree one to constantly check for inconsistencies.
+
+# Load the data
+
+Since the data come from a single file with multiple layers (bands), we can use a [RasterBrick](https://www.rdocumentation.org/packages/raster/versions/2.9-23/topics/brick). This gives us better performance when modifying the object.
+
+## Load the data
+
+```{r}
+# Read in the rasters by creating a RasterBrick
+## High res raster
+hr <- brick(here("raw_data", "precip_high_res.nc"))
+## Low res raster
+lr <- brick(here("raw_data", "precip_low_res.nc"))
+```
+
+## Preview the data
+
+Let's take a look at the first 12 months of data on each raster. The title in each plot contains the date.
+
+```{r high-res-preview, fig.width = 10, fig.height = 6, fig.cap = "First 12 months of data in the high resolution raster"}
+plot(hr[[1:12]])
+```
+
+```{r low-res-preview, fig.width = 10, fig.height = 6, fig.cap = "First 12 months of data in the low resolution raster"}
+plot(lr[[1:12]])
+```
+
+# Modifications
+
+The figures above show global precipitation over land. But we are only interested in Chile. In order to better manage the data, we must crop these rasters to the extent (boundign box) of Chile. Let's get a shapefile for Chile.
+
+## Chilean boundary
+
+The `rnaturalearth` package contains a repository of different political boundaries of interest. We can retrieve Chile's shapefile with the following lines.
+
+```{r}
+# Load chile boundaries
+chl <- ne_countries(scale = "medium", country = "Chile", returnclass = "sp")
+```
+
+The above retrieves the Chilean boundary shown below, which has a `medium` resolution. A high resolution is a bit problematic, because of the intricate coastline in the south.
+
+```{r chile-boundary, fig.cap = "Chilean boundarie from rnaturalearth"}
+plot(chl)
+```
+
+## Modify extent
+
+Figures \@ref(fig:high-res-preview) and \@ref(fig:low-res-preview) show how the data are global and that longitude goes from 0 to 360. Let's fix that first by cropping down to the extent of Chile, rotating the rasters, and then masking it by Chile.
+
+```{r}
+# Get Chile's extent and "rotate" its longitude
+chl_extent <- extent(chl) + c(360, 360, 0, 0)
+
+# Reduce size to extent of chile
+hr_ext <- crop(hr, y = chl_extent)
+lr_ext <- crop(lr, y = chl_extent)
+```
+
+The rasters are now cropped to Chile's extent.
+
+```{r hr-cropped, fig.cap = "First month of the high resolution raster for Chile"}
+plot(hr_ext[[1]])
+```
+
+```{r lr-cropped, fig.cap = "First month of the low resolution raster for Chile"}
+plot(lr_ext[[1]])
+```
+
+## Rotate to -180 to 180
+
+Before proceeding to extract data within the Chileanb boundary, we must rotate the rasters.
+
+```{r}
+# Rotate rasters
+hr_rot <- rotate(hr_ext)
+lr_rot <- rotate(lr_ext)
+```
+
+Note that the x-coordinates have changed.
+
+```{r hr-rotated, fig.cap = "Rotated high resolution raster."}
+plot(hr_rot[[1]])
+plot(chl, add = T)
+```
+
+```{r lr-rotated, fig.cap = "Rotated low resolution raster."}
+plot(lr_rot[[1]])
+plot(chl, add = T)
+```
+
+## Crop to Chile
+
+The above figures show all data in the *extent*, but we want them for cells that are within Chile only. We first reduce the extent because it's an operation that collects cells within 4 points (the bounding box). Now that we have less data, we can use a more intricate shape to extract the data. In this case, Chile's boundary.
+
+For the high resolution dataset that we will not modify, it's quite simple:
+
+
+```{r}
+# Change resolutions and mask to Chile
+# high res only needs masking
+hr_chl <- mask(hr_rot, chl)
+```
+
+The above produces:
+
+```{r hr-chl, fig.cap = "Rotated high resolution raster cropped to Chile"}
+plot(hr_chl[[1]])
+plot(chl, add = T)
+```
+
+However, cropping to Chile makes us lose some data. In the case above, that's ok. However, we don't want to lose data when downscaling the low resolution raster. This is because we are interpolating spatially, and even though some cells will fall out of the Chilean boundary, we still want them to inform the interpolation (climate does not distingush political boundaries).
+
+In this case, we first perform the downscaling, and then mask the data to the Chilean boundary:
+
+```{r}
+## low res to high res
+lr_chl <- disaggregate(lr_rot, fact = 2, method = "bilinear") %>% 
+  mask(chl)
+```
+
+This produces the following figure. It should look quite similar to the one above!
+
+```{r lr-chl, fig.cap = "Rotated and dowsncaled low resolution raster cropped to Chile"}
+plot(lr_chl[[1]])
+plot(chl, add = T)
+```
+
+## How good is the downscaling?
+
+Let's take a look at the differences for the first month.
+
+```{r rast-diff, fig.cap = "Error (low ress - high ress) introduced by downscaling."}
+# Calculate the differences
+diff <- lr_chl[[1]] - hr_chl[[1]]
+# Plot them
+plot(diff)
+plot(chl, add = T)
+```
+
+```{r, fig.cap = "Histogram of the errors"}
+hist(diff, breaks = 30)
+```
+
+# Finalize data
+
+## Convert the data into `data.frames`
+
+Let's convert the rasters into `data.frames` to further analyze possible discrepancies and create the panel.
+
+The pseudocode of what follows is this:
+
+- convert to a `data.frame`
+- modify the resulting `data.frame` to a long format (using `gather`)
+- delete empty cells (data over the ocean, for example, using `dorp_na`)
+- extract information from the raster layer names into dates (using `separate`)
+- create a date column (using `date`)
+
+We will do this to both raster bricks.
+
+```{r}
+##High resolution
+hr_df <- raster::as.data.frame(hr_chl, xy = T) %>% 
+  gather(date, precip, -c(x, y)) %>% 
+  drop_na() %>% 
+  mutate(date = str_remove(date, "X")) %>% 
+  separate(date, sep = "\\.", into = c("year", "month", "day", "hour", "minute", "second")) %>% 
+  mutate(date = date(paste(year, month, day, sep = "-"))) %>% 
+  select(lon = x, lat = y, year, month, day, date, precip_high = precip)
+
+# Low resolution, but downscaled
+lr_df <- raster::as.data.frame(lr_chl, xy = T) %>% 
+  gather(date, precip, -c(x, y)) %>% 
+  drop_na() %>% 
+  mutate(date = str_remove(date, "X")) %>% 
+  separate(date, sep = "\\.", into = c("year", "month", "day", "hour", "minute", "second")) %>% 
+  mutate(date = date(paste(year, month, day, sep = "-"))) %>% 
+  select(lon = x, lat = y, year, month, day, date, precip_low = precip)
+```
+
+These are now essentially panels for each cell in the raster file.
+
+```{r}
+head(hr_df)
+```
+
+```{r}
+head(lr_df)
+```
+
+## Export the resulting data
+
+```{r}
+write.csv(x = lr_df,
+          file = here("data", "precipitation_panel.csv"),
+          row.names = F)
+```
+
+## Further inspection
+
+We truly only care about `lr_df`, which contains the downscaled panel. But let's put them together for further inspection for accuracy.
+
+```{r}
+high_df <- lr_df %>% 
+  left_join(hr_df,
+            by = c("lon", "lat", "year", "month", "day", "date"))
+```
+
+Let's calculate the monthly mean temperature for Chile across all data and plot a time series of it.
+
+```{r, fig.width = 6, fig.height = 3, fig.cap = "Time series of high resolution and low resolution (dowscaled) data."}
+high_df %>% 
+  group_by(date) %>% 
+  summarize(precip_low = mean(precip_low, na.rm = T),
+            precip_high = mean(precip_high, na.rm = T)) %>% 
+  ungroup() %>% 
+  gather(source, precip, -date) %>% 
+  ggplot(aes(x = date, y = precip, color = source)) +
+  geom_line() +
+  ggtheme_plot() +
+  scale_color_brewer(palette = "Set1") +
+  theme(legend.position = c(0, 1),
+        legend.justification = c(0, 1)) +
+  guides(color = guide_legend(title = "Source"))
+```
+
+
+```{r, fig.width = 4, fig.height = 4, fig.cap = "Relationship between the dowsncaled data (x-axis) and original high resolution data (y-axis) for the period where they overlap."}
+high_df %>% 
+  group_by(year, month) %>% 
+  summarize(precip_low = mean(precip_low, na.rm = T),
+            precip_high = mean(precip_high, na.rm = T)) %>% 
+  ungroup() %>% 
+  mutate(year = as.numeric(year)) %>% 
+  ggplot(aes(x = precip_low, y = precip_high, color = year)) +
+  geom_point() +
+  ggtheme_plot() +
+  geom_abline(slope = 1,
+              intercept = 0,
+              linetype = "dashed") +
+  labs(x = "Downscaled",
+       y = "Original") +
+  scale_color_viridis_c() +
+  coord_equal() +
+  theme(legend.justification = c(0, 1),
+        legend.position = c(0, 1))
+```
+
+# Reproducibility info
+
+## Session info
+
+```{r}
+sessionInfo()
+```
+
+## System info
+
+```{r}
+Sys.info()
+```
+
+

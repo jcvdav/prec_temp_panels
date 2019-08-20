@@ -1,0 +1,95 @@
+---
+title: "Create panel"
+author: "Villaseñor-Derbez J.C."
+date: "Last compiled on `r Sys.Date()`"
+output:
+  bookdown::html_document2: 
+    fig_caption: yes
+    toc: yes
+    toc_float: yes
+    code_folding: hide
+---
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      message = FALSE)
+```
+
+# Load packages
+
+```{r}
+suppressPackageStartupMessages({
+  library(startR) #Custom functions
+  library(lubridate) #handle dates
+  library(here) #path management
+  library(tidyverse) #data management
+})
+```
+
+# Load the data
+
+```{r}
+prec <- read.csv(here("data", "precipitation_panel.csv"))
+temp <- read.csv(here("data", "temperature_panel.csv"))
+```
+
+```{r}
+panel <- prec %>% 
+  left_join(temp, by = c("year", "month", "day", "date", "lat", "lon")) %>% 
+  drop_na() %>% 
+  rename(precipitation = precip_low,
+         temperature = temp) %>% 
+  mutate(date = date(date))
+```
+
+Let's visualize the most recent month (July 2019).
+
+```{r}
+panel %>% 
+  filter(year == 2019, month == 7) %>% 
+  select(lon, lat, precipitation, temperature) %>% 
+  gather(variable, value, -c(lon, lat)) %>% 
+  ggplot(aes(x = lon, y = lat, fill = value)) +
+  geom_raster() +
+  facet_wrap(~variable) +
+  coord_equal() +
+  ggtheme_plot() +
+  scale_fill_viridis_c()
+```
+
+```{r}
+panel %>% 
+  group_by(date) %>% 
+  summarize(precipitation = mean(precipitation, na.rm = T),
+            temperature = mean(temperature, na.rm = T)) %>% 
+  ungroup() %>% 
+  gather(variable, value, -date) %>% 
+  ggplot(aes(x = date, y = value)) +
+  geom_line() +
+  ggtheme_plot() +
+  facet_wrap(~variable, scales = "free_y", ncol = 1)
+```
+
+## Export the panel
+
+```{r}
+write.csv(x = panel,
+          file = here("data", "precipitation_and_temperature_panel.csv"),
+          row.names = F)
+```
+
+
+# Reproducibility info
+
+## Session info
+
+```{r}
+sessionInfo()
+```
+
+## System info
+
+```{r}
+Sys.info()
+```

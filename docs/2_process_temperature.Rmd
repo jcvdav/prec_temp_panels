@@ -1,0 +1,183 @@
+---
+title: "Temperature data"
+author: "Villaseñor-Derbez J.C."
+date: "Last compiled on `r Sys.Date()`"
+output:
+  bookdown::html_document2: 
+    fig_caption: yes
+    toc: yes
+    toc_float: yes
+    code_folding: hide
+---
+
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      message = FALSE)
+```
+
+# Load packages
+
+```{r}
+suppressPackageStartupMessages({
+  library(startR) #custom functions
+  library(lubridate) #handle dates
+  library(here) #path management
+  library(rnaturalearth) #coastlines and basemaps
+  library(raster) #work with the NC file
+  library(tidyverse) #data management
+})
+```
+
+# The data
+
+Fir temperature data, we'll use [GHCN_CAMS Gridded 2m Temperature](https://esrl.noaa.gov/psd/data/gridded/data.ghcncams.html), which provides "Monthly means from 1948 to Jul 2019", using a "0.5 degree latitude x 0.5 degree longitude global grid (360x720)".
+
+
+These data are already on a 0.5 degree resolution, so there's no downscaling needed. We will just crop the extent, rotate the rasters, mask by chile, and create a panel.
+
+## Load the data
+
+```{r}
+temp <- brick(here("raw_data", "air_temp.nc"))
+```
+
+
+## Preview the data
+
+Let's take a look at the first 12 months of data on each raster. The title in each plot contains the date.
+
+```{r temp-preview, fig.width = 10, fig.height = 6, fig.cap = "First 12 months of data in the high resolution raster"}
+plot(temp[[1:12]])
+```
+
+# Modifications
+
+The figure above show global temperature over land. But we are only interested in Chile. In order to better manage the data, we must crop these rasters to the extent (boundign box) of Chile. Let's get a shapefile for Chile.
+
+## Chilean boundary
+
+The `rnaturalearth` package contains a repository of different political boundaries of interest. We can retrieve Chile's shapefile with the following lines.
+
+```{r}
+# Load chile boundaries
+chl <- ne_countries(scale = "medium", country = "Chile", returnclass = "sp")
+```
+
+The above retrieves the Chilean boundary shown below, which has a `medium` resolution. A high resolution is a bit problematic, because of the intricate coastline in the south.
+
+```{r chile-boundary, fig.cap = "Chilean boundarie from rnaturalearth"}
+plot(chl)
+```
+
+## Modify extent
+
+Figures \@ref(fig:temp-preview) shows how the data are global and that longitude goes from 0 to 360. Let's fix that first by cropping down to the extent of Chile, rotating the rasters, and then masking it by Chile.
+
+```{r}
+# Get Chile's extent and "rotate" its longitude
+chl_extent <- extent(chl) + c(360, 360, 0, 0)
+
+# Reduce size to extent of chile
+temp_ext <- crop(temp, y = chl_extent)
+```
+
+The rasters are now cropped to Chile's extent.
+
+```{r temp-cropped, fig.cap = "First month of temperature for Chile"}
+plot(temp_ext[[1]])
+```
+
+## Convert units
+
+Note that the colorbar indicates temperatures from 260 to 300. This is because it is in Kelvin. Let's convert the data to celsius.
+
+```{r}
+# Convert units
+temp_cel <- temp_ext -273.15
+```
+
+```{r temp-cel, fig.cap = "FData converted to celsius"}
+plot(temp_cel[[1]])
+```
+
+## Rotate to -180 to 180
+
+```{r}
+# Rotate the raster
+temp_rot <- rotate(temp_cel)
+```
+
+```{r}
+plot(temp_rot[[1]])
+plot(chl, add = T)
+```
+
+## Crop to Chile
+
+The above figures show all data in the extent, but we want them for cells that are within Chile only. We first reduce the extent because it’s an operation that collects cells within 4 points (the bounding box). Now that we have less data, we can use a more intricate shape to extract the data. In this case, Chile’s boundary.
+
+```{r}
+temp_chl <- mask(temp_rot, chl)
+```
+
+```{r}
+plot(temp_chl[[1]])
+plot(chl, add = T)
+```
+
+
+# Finalize the data
+
+## Convert to a `data.frame`
+
+```{r}
+temp_df <- raster::as.data.frame(temp_chl, xy = T) %>% 
+  gather(date, temp, -c(x, y)) %>% 
+  drop_na() %>% 
+  mutate(date = str_remove(date, "X")) %>% 
+  separate(date, sep = "\\.", into = c("year", "month", "day", "hour", "minute", "second")) %>% 
+  mutate(date = date(paste(year, month, day, sep = "-"))) %>% 
+  select(lon = x, lat = y, year, month, day, date, temp)
+```
+
+```{r}
+head(temp_df)
+```
+
+## Export the resulting data
+
+```{r}
+write.csv(x = temp_df,
+          file = here("data", "temperature_panel.csv"),
+          row.names = F)
+```
+
+
+## Further inspection
+
+```{r, fig.width = 6, fig.height = 3, fig.cap = "Time series of surface temperature in chile."}
+temp_df %>% 
+  group_by(date) %>% 
+  summarize(temp = mean(temp, na.rm = T)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = date, y = temp)) +
+  geom_line() +
+  ggtheme_plot()
+```
+
+
+# Reproducibility info
+
+## Session info
+
+```{r}
+sessionInfo()
+```
+
+## System info
+
+```{r}
+Sys.info()
+```
