@@ -18,7 +18,7 @@
    |__precip_low_res.nc
 -- README.md
 -- scripts
-   |__download_rasers.R
+   |__download_rasters.R
 ```
 
 ## Set up
@@ -37,6 +37,6 @@ Running the above will be useful if, for example, you want to update the data by
 
 ## Data processing
 
-There are three documents containing the data processing. They are all under the `docs` folder. The first document, `1_process_precipitation` shows the downscaling and conversion of raster to data.frame. `2_process_temperature` converts the temperature nc files into a panel. Finally, `3_create_panel` puts these panels together to create a monthly panel of precipitation and temperature for every cell. These data are under `data/precipitation_and_temperature_panel.csv`.
+There are three documents containing the data processing. They are all under the `docs` folder. The first document, [`1_process_precipitation`](https://jcvdav.github.io/prec_temp_panels/1_process_precipitation.html) shows the downscaling and conversion of raster to data.frame. [`2_process_temperature`](https://jcvdav.github.io/prec_temp_panels/2_process_temperature.html) converts the temperature nc files into a panel. Finally, [`3_create_panel`](https://jcvdav.github.io/prec_temp_panels/3_create_panel.html) puts these panels together to create a monthly panel of precipitation and temperature for every cell. These data are under `data/precipitation_and_temperature_panel.csv`.
 
 For questions about this, contact juancarlos@ucsb.edu
