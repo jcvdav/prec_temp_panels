@@ -124,7 +124,7 @@ temp_chl <- mask(temp_rot, chl)
 
 ```{r}
 writeRaster(x = temp_chl,
-            filename = "temperature_raster_chile.tif")
+            filename = here("data", "temperature_raster_chile.tif"))
 ```
 
 
