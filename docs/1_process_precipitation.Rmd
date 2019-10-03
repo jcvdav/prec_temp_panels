@@ -170,6 +170,12 @@ lr_chl <- disaggregate(lr_rot, fact = 2, method = "bilinear") %>%
   mask(chl)
 ```
 
+```{r}
+writeRaster(x = lr_chl,
+            filename = here("data", "precipitation_raster_chile.tif"))
+```
+
+
 This produces the following figure. It should look quite similar to the one above!
 
 ```{r lr-chl, fig.cap = "Rotated and dowsncaled low resolution raster cropped to Chile"}

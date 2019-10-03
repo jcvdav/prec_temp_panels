@@ -123,6 +123,12 @@ temp_chl <- mask(temp_rot, chl)
 ```
 
 ```{r}
+writeRaster(x = temp_chl,
+            filename = "temperature_raster_chile.tif")
+```
+
+
+```{r}
 plot(temp_chl[[1]])
 plot(chl, add = T)
 ```
