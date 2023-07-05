@@ -28,7 +28,7 @@ download.file(url = url_precip_low,
               destfile = here("raw_data", "precip_low_res.nc"),
               mode = "wb")
 
-download.file(url = url_precip_high,
+download.file(url = url_temp,
               destfile = here("raw_data", "air_temp.nc"),
               mode = "wb")
 
