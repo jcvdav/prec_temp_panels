@@ -20,7 +20,7 @@ knitr::opts_chunk$set(echo = TRUE,
 
 ```{r}
 suppressPackageStartupMessages({
-  library(startR) #custom functions
+  # library(startR) #custom functions
   library(lubridate) #handle dates
   library(here) #path management
   library(rnaturalearth) #coastlines and basemaps
@@ -86,7 +86,7 @@ The `rnaturalearth` package contains a repository of different political boundar
 
 ```{r}
 # Load chile boundaries
-chl <- ne_countries(scale = "medium", country = "Chile", returnclass = "sp")
+chl <- ne_countries(scale = "large", country = "Chile", returnclass = "sp")
 ```
 
 The above retrieves the Chilean boundary shown below, which has a `medium` resolution. A high resolution is a bit problematic, because of the intricate coastline in the south.
@@ -172,7 +172,8 @@ lr_chl <- disaggregate(lr_rot, fact = 2, method = "bilinear") %>%
 
 ```{r}
 writeRaster(x = lr_chl,
-            filename = here("data", "precipitation_raster_chile.tif"))
+            filename = here("data", "precipitation_raster_chile.tif"),
+            overwrite = T)
 ```
 
 
@@ -274,7 +275,6 @@ high_df %>%
   gather(source, precip, -date) %>% 
   ggplot(aes(x = date, y = precip, color = source)) +
   geom_line() +
-  ggtheme_plot() +
   scale_color_brewer(palette = "Set1") +
   theme(legend.position = c(0, 1),
         legend.justification = c(0, 1)) +
@@ -291,7 +291,6 @@ high_df %>%
   mutate(year = as.numeric(year)) %>% 
   ggplot(aes(x = precip_low, y = precip_high, color = year)) +
   geom_point() +
-  ggtheme_plot() +
   geom_abline(slope = 1,
               intercept = 0,
               linetype = "dashed") +

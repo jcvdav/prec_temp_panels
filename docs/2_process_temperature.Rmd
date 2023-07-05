@@ -21,7 +21,7 @@ knitr::opts_chunk$set(echo = TRUE,
 
 ```{r}
 suppressPackageStartupMessages({
-  library(startR) #custom functions
+  # library(startR) #custom functions
   library(lubridate) #handle dates
   library(here) #path management
   library(rnaturalearth) #coastlines and basemaps
@@ -62,7 +62,7 @@ The `rnaturalearth` package contains a repository of different political boundar
 
 ```{r}
 # Load chile boundaries
-chl <- ne_countries(scale = "medium", country = "Chile", returnclass = "sp")
+chl <- ne_countries(scale = "large", country = "Chile", returnclass = "sp")
 ```
 
 The above retrieves the Chilean boundary shown below, which has a `medium` resolution. A high resolution is a bit problematic, because of the intricate coastline in the south.
@@ -124,7 +124,8 @@ temp_chl <- mask(temp_rot, chl)
 
 ```{r}
 writeRaster(x = temp_chl,
-            filename = here("data", "temperature_raster_chile.tif"))
+            filename = here("data", "temperature_raster_chile.tif"),
+            overwrite = T)
 ```
 
 
@@ -169,8 +170,7 @@ temp_df %>%
   summarize(temp = mean(temp, na.rm = T)) %>% 
   ungroup() %>% 
   ggplot(aes(x = date, y = temp)) +
-  geom_line() +
-  ggtheme_plot()
+  geom_line()
 ```
 
 

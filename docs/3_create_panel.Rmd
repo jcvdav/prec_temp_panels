@@ -20,7 +20,7 @@ knitr::opts_chunk$set(echo = TRUE,
 
 ```{r}
 suppressPackageStartupMessages({
-  library(startR) #Custom functions
+  # library(startR) #Custom functions
   library(lubridate) #handle dates
   library(here) #path management
   library(tidyverse) #data management
@@ -54,7 +54,6 @@ panel %>%
   geom_raster() +
   facet_wrap(~variable) +
   coord_equal() +
-  ggtheme_plot() +
   scale_fill_viridis_c()
 ```
 
@@ -67,7 +66,6 @@ panel %>%
   gather(variable, value, -date) %>% 
   ggplot(aes(x = date, y = value)) +
   geom_line() +
-  ggtheme_plot() +
   facet_wrap(~variable, scales = "free_y", ncol = 1)
 ```
 
